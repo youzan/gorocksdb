@@ -23,3 +23,13 @@ func (c *Cache) Destroy() {
 	C.rocksdb_cache_destroy(c.c)
 	c.c = nil
 }
+
+func (c *Cache) GetUsage() int64 {
+	return 0
+	//return int64(C.rocksdb_cache_get_usage(c.c))
+}
+
+func (c *Cache) GetPinnedUsage() int64 {
+	return 0
+	//return int64(C.rocksdb_cache_get_pinned_usage(c.c))
+}

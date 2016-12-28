@@ -970,6 +970,10 @@ func (opts *Options) SetBlockBasedTableFactory(value *BlockBasedTableOptions) {
 	C.rocksdb_options_set_block_based_table_factory(opts.c, value.c)
 }
 
+func (opts *Options) GetBlockBasedTableFactory() *BlockBasedTableOptions {
+	return opts.bbto
+}
+
 // Destroy deallocates the Options object.
 func (opts *Options) Destroy() {
 	C.rocksdb_options_destroy(opts.c)

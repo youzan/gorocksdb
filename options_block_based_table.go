@@ -94,6 +94,10 @@ func (opts *BlockBasedTableOptions) SetBlockCache(cache *Cache) {
 	C.rocksdb_block_based_options_set_block_cache(opts.c, cache.c)
 }
 
+func (opts *BlockBasedTableOptions) GetBlockCache() *Cache {
+	return opts.cache
+}
+
 // SetBlockCacheCompressed sets the cache for compressed blocks.
 // If nil, rocksdb will not use a compressed block cache.
 // Default: nil
