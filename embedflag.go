@@ -4,7 +4,7 @@ package gorocksdb
 
 // #cgo CXXFLAGS: -std=c++11
 // #cgo CPPFLAGS: -I${SRCDIR}/../../cockroachdb/c-lz4/internal/lib
-// #cgo CPPFLAGS: -I${SRCDIR}/../../cockroachdb/c-rocksdb/internal/include
+// #cgo CPPFLAGS: -I${SRCDIR}/../c-rocksdb/internal/include
 // #cgo CPPFLAGS: -I${SRCDIR}/../../cockroachdb/c-snappy/internal
 // #cgo LDFLAGS: -lstdc++
 // #cgo darwin LDFLAGS: -Wl,-undefined -Wl,dynamic_lookup
@@ -12,7 +12,7 @@ package gorocksdb
 import "C"
 
 import (
+	_ "github.com/absolute8511/c-rocksdb"
 	_ "github.com/cockroachdb/c-lz4"
-	_ "github.com/cockroachdb/c-rocksdb"
 	_ "github.com/cockroachdb/c-snappy"
 )

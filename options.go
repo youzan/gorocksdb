@@ -451,37 +451,6 @@ func (opts *Options) SetMaxBytesForLevelMultiplierAdditional(value []int) {
 	C.rocksdb_options_set_max_bytes_for_level_multiplier_additional(opts.c, &cLevels[0], C.size_t(len(value)))
 }
 
-// SetExpandedCompactionFactor sets the maximum number of bytes
-// in all compacted files.
-//
-// We avoid expanding the lower level file set of a compaction
-// if it would make the total compaction cover more than
-// (expanded_compaction_factor * targetFileSizeLevel()) many bytes.
-// Default: 25
-func (opts *Options) SetExpandedCompactionFactor(value int) {
-	C.rocksdb_options_set_expanded_compaction_factor(opts.c, C.int(value))
-}
-
-// SetSourceCompactionFactor sets the maximum number of bytes
-// in all source files to be compacted in a single compaction run.
-//
-// We avoid picking too many files in the
-// source level so that we do not exceed the total source bytes
-// for compaction to exceed
-// (source_compaction_factor * targetFileSizeLevel()) many bytes.
-// Default: 1
-func (opts *Options) SetSourceCompactionFactor(value int) {
-	C.rocksdb_options_set_source_compaction_factor(opts.c, C.int(value))
-}
-
-// SetMaxGrandparentOverlapFactor sets the maximum bytes
-// of overlaps in grandparent (i.e., level+2) before we
-// stop building a single file in a level->level+1 compaction.
-// Default: 10
-func (opts *Options) SetMaxGrandparentOverlapFactor(value int) {
-	C.rocksdb_options_set_max_grandparent_overlap_factor(opts.c, C.int(value))
-}
-
 // SetDisableDataSync enable/disable data sync.
 //
 // If true, then the contents of data files are not synced
@@ -856,9 +825,9 @@ func (opts *Options) SetBloomLocality(value uint32) {
 	C.rocksdb_options_set_bloom_locality(opts.c, C.uint32_t(value))
 }
 
-//func (opts *Options) SetMemtablePrefixBloomSizeRatio(value float64) {
-//	C.rocksdb_options_set_memtable_prefix_bloom_size_ratio(opts.c, C.double(value))
-//}
+func (opts *Options) SetMemtablePrefixBloomSizeRatio(value float64) {
+	C.rocksdb_options_set_memtable_prefix_bloom_size_ratio(opts.c, C.double(value))
+}
 
 // SetMaxSuccessiveMerges sets the maximum number of
 // successive merge operations on a key in the memtable.
