@@ -160,3 +160,40 @@ func (b *BackupEngine) PurgeOldBackups(db *DB, num_backups_to_keep int) error {
 	}
 	return nil
 }
+
+type Checkpoint struct {
+	c   *C.rocksdb_checkpoint_t
+	cDb *C.rocksdb_t
+}
+
+func NewCheckpoint(db *DB) (*Checkpoint, error) {
+	var cErr *C.char
+	cCheck := C.rocksdb_create_checkpoint(db.c, &cErr)
+	if cErr != nil {
+		defer C.free(unsafe.Pointer(cErr))
+		return nil, errors.New(C.GoString(cErr))
+	}
+	return &Checkpoint{
+		c:   cCheck,
+		cDb: db.c,
+	}, nil
+}
+
+func (c *Checkpoint) Save(dir string) error {
+	var (
+		cErr *C.char
+		cDir = C.CString(dir)
+	)
+	defer C.free(unsafe.Pointer(cDir))
+	C.rocksdb_checkpoint_open(c.c, cDir, &cErr)
+	if cErr != nil {
+		defer C.free(unsafe.Pointer(cErr))
+		return errors.New(C.GoString(cErr))
+	}
+	return nil
+}
+
+func (c *Checkpoint) Destroy() {
+	C.rocksdb_destroy_checkpoint(c.c)
+	c.c, c.cDb = nil, nil
+}
