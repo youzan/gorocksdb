@@ -45,7 +45,10 @@ func (fp nativeFilterPolicy) Name() string                               { retur
 // ignores trailing spaces, it would be incorrect to use a
 // FilterPolicy (like NewBloomFilterPolicy) that does not ignore
 // trailing spaces in keys.
-func NewBloomFilter(bitsPerKey int) FilterPolicy {
+func NewBloomFilter(bitsPerKey int, original_format bool) FilterPolicy {
+	if !original_format {
+		return NewNativeFilterPolicy(C.rocksdb_filterpolicy_create_bloom_full(C.int(bitsPerKey)))
+	}
 	return NewNativeFilterPolicy(C.rocksdb_filterpolicy_create_bloom(C.int(bitsPerKey)))
 }
 
