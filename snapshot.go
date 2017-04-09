@@ -9,9 +9,8 @@ type Snapshot struct {
 	cDb *C.rocksdb_t
 }
 
-func NewSnapshot(db *DB) *Snapshot {
-	c := C.rocksdb_create_snapshot(db.c)
-	return &Snapshot{c, db.c}
+func NewSnapshot(db *DB) (*Snapshot, error) {
+	return db.NewSnapshot()
 }
 
 // NewNativeSnapshot creates a Snapshot object.

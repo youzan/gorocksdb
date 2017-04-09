@@ -5,6 +5,7 @@ package gorocksdb
 import "C"
 import (
 	"errors"
+	"sync"
 	"unsafe"
 )
 
@@ -15,11 +16,17 @@ type Range struct {
 	Limit []byte
 }
 
+var errDBClosed = errors.New("db engine closed")
+
 // DB is a reusable handle to a RocksDB database on disk, created by Open.
 type DB struct {
-	c    *C.rocksdb_t
-	name string
-	opts *Options
+	// lock protect the read from closed engine
+	// for snapshot, iterator, should call rlock by caller
+	sync.RWMutex
+	c      *C.rocksdb_t
+	name   string
+	opts   *Options
+	opened int32
 }
 
 // OpenDb opens a database with the specified options.
@@ -35,9 +42,10 @@ func OpenDb(opts *Options, name string) (*DB, error) {
 		return nil, errors.New(C.GoString(cErr))
 	}
 	return &DB{
-		name: name,
-		c:    db,
-		opts: opts,
+		name:   name,
+		c:      db,
+		opts:   opts,
+		opened: int32(1),
 	}, nil
 }
 
@@ -54,9 +62,10 @@ func OpenDbForReadOnly(opts *Options, name string, errorIfLogFileExist bool) (*D
 		return nil, errors.New(C.GoString(cErr))
 	}
 	return &DB{
-		name: name,
-		c:    db,
-		opts: opts,
+		name:   name,
+		c:      db,
+		opts:   opts,
+		opened: int32(1),
 	}, nil
 }
 
@@ -113,9 +122,10 @@ func OpenDbColumnFamilies(
 	}
 
 	return &DB{
-		name: name,
-		c:    db,
-		opts: opts,
+		name:   name,
+		c:      db,
+		opts:   opts,
+		opened: int32(1),
 	}, cfHandles, nil
 }
 
@@ -175,9 +185,10 @@ func OpenDbForReadOnlyColumnFamilies(
 	}
 
 	return &DB{
-		name: name,
-		c:    db,
-		opts: opts,
+		name:   name,
+		c:      db,
+		opts:   opts,
+		opened: int32(1),
 	}, cfHandles, nil
 }
 
@@ -221,7 +232,13 @@ func (db *DB) Get(opts *ReadOptions, key []byte) (*Slice, error) {
 		cValLen C.size_t
 		cKey    = byteToChar(key)
 	)
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return nil, errDBClosed
+	}
 	cValue := C.rocksdb_get(db.c, opts.c, cKey, C.size_t(len(key)), &cValLen, &cErr)
+	db.RUnlock()
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return nil, errors.New(C.GoString(cErr))
@@ -236,7 +253,14 @@ func (db *DB) GetBytes(opts *ReadOptions, key []byte) ([]byte, error) {
 		cValLen C.size_t
 		cKey    = byteToChar(key)
 	)
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return nil, errDBClosed
+	}
+
 	cValue := C.rocksdb_get(db.c, opts.c, cKey, C.size_t(len(key)), &cValLen, &cErr)
+	db.RUnlock()
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return nil, errors.New(C.GoString(cErr))
@@ -255,7 +279,14 @@ func (db *DB) GetCF(opts *ReadOptions, cf *ColumnFamilyHandle, key []byte) (*Sli
 		cValLen C.size_t
 		cKey    = byteToChar(key)
 	)
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return nil, errDBClosed
+	}
+
 	cValue := C.rocksdb_get_cf(db.c, opts.c, cf.c, cKey, C.size_t(len(key)), &cValLen, &cErr)
+	db.RUnlock()
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return nil, errors.New(C.GoString(cErr))
@@ -273,13 +304,24 @@ func (db *DB) MultiGetBytes(opts *ReadOptions, keyList [][]byte, values [][]byte
 		cKeys[i] = cByteSlice(k)
 		cKeySizeList[i] = C.size_t(len(k))
 	}
-	C.rocksdb_multi_get(db.c, opts.c, C.size_t(len(keyList)),
-		(**C.char)(unsafe.Pointer(&cKeys[0])),
-		(*C.size_t)(unsafe.Pointer(&cKeySizeList[0])),
-		(**C.char)(unsafe.Pointer(&cValues[0])),
-		(*C.size_t)(unsafe.Pointer(&cValueSizeList[0])),
-		(**C.char)(unsafe.Pointer(&cErrs[0])),
-	)
+	db.RLock()
+	if db.opened == 1 {
+		C.rocksdb_multi_get(db.c, opts.c, C.size_t(len(keyList)),
+			(**C.char)(unsafe.Pointer(&cKeys[0])),
+			(*C.size_t)(unsafe.Pointer(&cKeySizeList[0])),
+			(**C.char)(unsafe.Pointer(&cValues[0])),
+			(*C.size_t)(unsafe.Pointer(&cValueSizeList[0])),
+			(**C.char)(unsafe.Pointer(&cErrs[0])),
+		)
+	} else {
+		for i := 0; i < len(keyList); i++ {
+			values[i] = nil
+			errs[i] = errDBClosed
+			C.free(unsafe.Pointer(cKeys[i]))
+		}
+		return
+	}
+	db.RUnlock()
 	for i := 0; i < len(keyList); i++ {
 		if cErrs[i] == nil {
 			if cValues[i] == nil {
@@ -362,7 +404,14 @@ func (db *DB) Merge(opts *WriteOptions, key []byte, value []byte) error {
 		cKey   = byteToChar(key)
 		cValue = byteToChar(value)
 	)
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return errDBClosed
+	}
+
 	C.rocksdb_merge(db.c, opts.c, cKey, C.size_t(len(key)), cValue, C.size_t(len(value)), &cErr)
+	db.RUnlock()
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return errors.New(C.GoString(cErr))
@@ -378,7 +427,14 @@ func (db *DB) MergeCF(opts *WriteOptions, cf *ColumnFamilyHandle, key []byte, va
 		cKey   = byteToChar(key)
 		cValue = byteToChar(value)
 	)
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return errDBClosed
+	}
+
 	C.rocksdb_merge_cf(db.c, opts.c, cf.c, cKey, C.size_t(len(key)), cValue, C.size_t(len(value)), &cErr)
+	db.RUnlock()
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return errors.New(C.GoString(cErr))
@@ -399,29 +455,46 @@ func (db *DB) Write(opts *WriteOptions, batch *WriteBatch) error {
 
 // NewIterator returns an Iterator over the the database that uses the
 // ReadOptions given.
-func (db *DB) NewIterator(opts *ReadOptions) *Iterator {
+// iterator should be protected by rlock by caller since it may hold during iterating
+func (db *DB) NewIterator(opts *ReadOptions) (*Iterator, error) {
+	if db.opened == 0 {
+		return nil, errDBClosed
+	}
 	cIter := C.rocksdb_create_iterator(db.c, opts.c)
-	return NewNativeIterator(unsafe.Pointer(cIter))
+	return NewNativeIterator(unsafe.Pointer(cIter)), nil
 }
 
 // NewIteratorCF returns an Iterator over the the database and column family
 // that uses the ReadOptions given.
-func (db *DB) NewIteratorCF(opts *ReadOptions, cf *ColumnFamilyHandle) *Iterator {
+func (db *DB) NewIteratorCF(opts *ReadOptions, cf *ColumnFamilyHandle) (*Iterator, error) {
+	if db.opened == 0 {
+		return nil, errDBClosed
+	}
 	cIter := C.rocksdb_create_iterator_cf(db.c, opts.c, cf.c)
-	return NewNativeIterator(unsafe.Pointer(cIter))
+	return NewNativeIterator(unsafe.Pointer(cIter)), nil
 }
 
 // NewSnapshot creates a new snapshot of the database.
-func (db *DB) NewSnapshot() *Snapshot {
+func (db *DB) NewSnapshot() (*Snapshot, error) {
+	if db.opened == 0 {
+		return nil, errDBClosed
+	}
 	cSnap := C.rocksdb_create_snapshot(db.c)
-	return NewNativeSnapshot(cSnap, db.c)
+	return NewNativeSnapshot(cSnap, db.c), nil
 }
 
 // GetProperty returns the value of a database property.
 func (db *DB) GetProperty(propName string) string {
 	cprop := C.CString(propName)
 	defer C.free(unsafe.Pointer(cprop))
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return ""
+	}
+
 	cValue := C.rocksdb_property_value(db.c, cprop)
+	db.RUnlock()
 	defer C.free(unsafe.Pointer(cValue))
 	return C.GoString(cValue)
 }
@@ -430,12 +503,20 @@ func (db *DB) GetProperty(propName string) string {
 func (db *DB) GetPropertyCF(propName string, cf *ColumnFamilyHandle) string {
 	cProp := C.CString(propName)
 	defer C.free(unsafe.Pointer(cProp))
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return ""
+	}
+
 	cValue := C.rocksdb_property_value_cf(db.c, cf.c, cProp)
+	db.RUnlock()
 	defer C.free(unsafe.Pointer(cValue))
 	return C.GoString(cValue)
 }
 
 // CreateColumnFamily create a new column family.
+// ColumnFamily should be closed before the engine closed
 func (db *DB) CreateColumnFamily(opts *Options, name string) (*ColumnFamilyHandle, error) {
 	var (
 		cErr  *C.char
@@ -482,6 +563,11 @@ func (db *DB) GetApproximateSizes(ranges []Range) []uint64 {
 		cLimits[i] = byteToChar(r.Limit)
 		cLimitLens[i] = C.size_t(len(r.Limit))
 	}
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return nil
+	}
 
 	C.rocksdb_approximate_sizes(
 		db.c,
@@ -492,6 +578,7 @@ func (db *DB) GetApproximateSizes(ranges []Range) []uint64 {
 		&cLimitLens[0],
 		(*C.uint64_t)(&sizes[0]))
 
+	db.RUnlock()
 	return sizes
 }
 
@@ -516,6 +603,11 @@ func (db *DB) GetApproximateSizesCF(cf *ColumnFamilyHandle, ranges []Range) []ui
 		cLimits[i] = byteToChar(r.Limit)
 		cLimitLens[i] = C.size_t(len(r.Limit))
 	}
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return nil
+	}
 
 	C.rocksdb_approximate_sizes_cf(
 		db.c,
@@ -527,6 +619,7 @@ func (db *DB) GetApproximateSizesCF(cf *ColumnFamilyHandle, ranges []Range) []ui
 		&cLimitLens[0],
 		(*C.uint64_t)(&sizes[0]))
 
+	db.RUnlock()
 	return sizes
 }
 
@@ -542,7 +635,14 @@ type LiveFileMetadata struct {
 // GetLiveFilesMetaData returns a list of all table files with their
 // level, start key and end key.
 func (db *DB) GetLiveFilesMetaData() []LiveFileMetadata {
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return nil
+	}
+
 	lf := C.rocksdb_livefiles(db.c)
+
 	defer C.rocksdb_livefiles_destroy(lf)
 
 	count := C.rocksdb_livefiles_count(lf)
@@ -561,6 +661,7 @@ func (db *DB) GetLiveFilesMetaData() []LiveFileMetadata {
 		liveFile.LargestKey = C.GoBytes(unsafe.Pointer(key), C.int(cSize))
 		liveFiles[int(i)] = liveFile
 	}
+	db.RUnlock()
 	return liveFiles
 }
 
@@ -569,7 +670,14 @@ func (db *DB) GetLiveFilesMetaData() []LiveFileMetadata {
 func (db *DB) CompactRange(r Range) {
 	cStart := byteToChar(r.Start)
 	cLimit := byteToChar(r.Limit)
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return
+	}
+
 	C.rocksdb_compact_range(db.c, cStart, C.size_t(len(r.Start)), cLimit, C.size_t(len(r.Limit)))
+	db.RUnlock()
 }
 
 // CompactRangeCF runs a manual compaction on the Range of keys given on the
@@ -577,13 +685,27 @@ func (db *DB) CompactRange(r Range) {
 func (db *DB) CompactRangeCF(cf *ColumnFamilyHandle, r Range) {
 	cStart := byteToChar(r.Start)
 	cLimit := byteToChar(r.Limit)
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return
+	}
+
 	C.rocksdb_compact_range_cf(db.c, cf.c, cStart, C.size_t(len(r.Start)), cLimit, C.size_t(len(r.Limit)))
+	db.RUnlock()
 }
 
 // Flush triggers a manuel flush for the database.
 func (db *DB) Flush(opts *FlushOptions) error {
 	var cErr *C.char
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return errDBClosed
+	}
+
 	C.rocksdb_flush(db.c, opts.c, &cErr)
+	db.RUnlock()
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return errors.New(C.GoString(cErr))
@@ -594,7 +716,14 @@ func (db *DB) Flush(opts *FlushOptions) error {
 // DisableFileDeletions disables file deletions and should be used when backup the database.
 func (db *DB) DisableFileDeletions() error {
 	var cErr *C.char
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return errDBClosed
+	}
+
 	C.rocksdb_disable_file_deletions(db.c, &cErr)
+	db.RUnlock()
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return errors.New(C.GoString(cErr))
@@ -605,7 +734,14 @@ func (db *DB) DisableFileDeletions() error {
 // EnableFileDeletions enables file deletions for the database.
 func (db *DB) EnableFileDeletions(force bool) error {
 	var cErr *C.char
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return errDBClosed
+	}
+
 	C.rocksdb_enable_file_deletions(db.c, boolToChar(force), &cErr)
+	db.RUnlock()
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return errors.New(C.GoString(cErr))
@@ -619,8 +755,15 @@ func (db *DB) DeleteFilesInRange(r Range) error {
 		//cStart = byteToChar(r.Start)
 		//cLimit = byteToChar(r.Limit)
 	)
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return errDBClosed
+	}
+
 	// TODO: wait merge
 	//C.rocksdb_delete_file_in_range(db.c, cStart, C.size_t(len(r.Start)), cEnd, C.size_t(len(r.Limit)), &cErr)
+	db.RUnlock()
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return errors.New(C.GoString(cErr))
@@ -634,12 +777,22 @@ func (db *DB) DeleteFilesInRange(r Range) error {
 func (db *DB) DeleteFile(name string) {
 	cName := C.CString(name)
 	defer C.free(unsafe.Pointer(cName))
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return
+	}
+
 	C.rocksdb_delete_file(db.c, cName)
+	db.RUnlock()
 }
 
 // Close closes the database.
 func (db *DB) Close() {
+	db.Lock()
 	C.rocksdb_close(db.c)
+	db.opened = 0
+	db.Unlock()
 }
 
 // DestroyDb removes a database entirely, removing everything from the
