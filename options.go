@@ -943,6 +943,10 @@ func (opts *Options) GetBlockBasedTableFactory() *BlockBasedTableOptions {
 	return opts.bbto
 }
 
+func (opts *Options) SetUint64AddMergeOperator() {
+	C.rocksdb_options_set_uint64add_merge_operator(opts.c)
+}
+
 // Destroy deallocates the Options object.
 func (opts *Options) Destroy() {
 	C.rocksdb_options_destroy(opts.c)
