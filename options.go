@@ -65,9 +65,14 @@ type Options struct {
 
 	// We keep these so we can free their memory in Destroy.
 	ccmp *C.rocksdb_comparator_t
-	cmo  *C.rocksdb_mergeoperator_t
-	cst  *C.rocksdb_slicetransform_t
-	ccf  *C.rocksdb_compactionfilter_t
+
+	// since this will be hold by the rocksdb options in shared_ptr after set prefix extractor
+	// we should not release by manual
+	//cmo  *C.rocksdb_mergeoperator_t
+	//cst  *C.rocksdb_slicetransform_t
+
+	ccf *C.rocksdb_compactionfilter_t
+	rl  *RateLimiter
 }
 
 // NewDefaultOptions creates the default Options.
@@ -113,12 +118,12 @@ func (opts *Options) SetComparator(value Comparator) {
 // Default: nil
 func (opts *Options) SetMergeOperator(value MergeOperator) {
 	if nmo, ok := value.(nativeMergeOperator); ok {
-		opts.cmo = nmo.c
+		C.rocksdb_options_set_merge_operator(opts.c, nmo.c)
 	} else {
 		idx := registerMergeOperator(value)
-		opts.cmo = C.gorocksdb_mergeoperator_create(C.uintptr_t(idx))
+		cmo := C.gorocksdb_mergeoperator_create(C.uintptr_t(idx))
+		C.rocksdb_options_set_merge_operator(opts.c, cmo)
 	}
-	C.rocksdb_options_set_merge_operator(opts.c, opts.cmo)
 }
 
 // A single CompactionFilter instance to call into during compaction.
@@ -195,6 +200,12 @@ func (opts *Options) SetEnv(value *Env) {
 	opts.env = value
 
 	C.rocksdb_options_set_env(opts.c, value.c)
+}
+
+func (opts *Options) SetRateLimiter(value *RateLimiter) {
+	// TODO: wait merge from rocksdb
+	//opts.rl = value
+	//C.rocksdb_options_set_ratelimiter(opts.c, value.c)
 }
 
 // SetInfoLogLevel sets the info log level.
@@ -340,12 +351,12 @@ func (opts *Options) SetCompressionOptions(value *CompressionOptions) {
 // Default: nil
 func (opts *Options) SetPrefixExtractor(value SliceTransform) {
 	if nst, ok := value.(nativeSliceTransform); ok {
-		opts.cst = nst.c
+		C.rocksdb_options_set_prefix_extractor(opts.c, nst.c)
 	} else {
 		idx := registerSliceTransform(value)
-		opts.cst = C.gorocksdb_slicetransform_create(C.uintptr_t(idx))
+		cst := C.gorocksdb_slicetransform_create(C.uintptr_t(idx))
+		C.rocksdb_options_set_prefix_extractor(opts.c, cst)
 	}
-	C.rocksdb_options_set_prefix_extractor(opts.c, opts.cst)
 }
 
 // SetNumLevels sets the number of levels for this database.
@@ -953,16 +964,20 @@ func (opts *Options) Destroy() {
 	if opts.ccmp != nil {
 		C.rocksdb_comparator_destroy(opts.ccmp)
 	}
-	if opts.cmo != nil {
-		C.rocksdb_mergeoperator_destroy(opts.cmo)
-	}
-	if opts.cst != nil {
-		C.rocksdb_slicetransform_destroy(opts.cst)
-	}
 	if opts.ccf != nil {
 		C.rocksdb_compactionfilter_destroy(opts.ccf)
 	}
 	opts.c = nil
-	opts.env = nil
-	opts.bbto = nil
+	if opts.env != nil {
+		opts.env.Destroy()
+		opts.env = nil
+	}
+	if opts.bbto != nil {
+		opts.bbto.Destroy()
+		opts.bbto = nil
+	}
+	if opts.rl != nil {
+		opts.rl.Destroy()
+		opts.rl = nil
+	}
 }
