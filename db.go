@@ -6,6 +6,7 @@ import "C"
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -244,6 +245,28 @@ func (db *DB) Get(opts *ReadOptions, key []byte) (*Slice, error) {
 		return nil, errors.New(C.GoString(cErr))
 	}
 	return NewSlice(cValue, cValLen), nil
+}
+
+func (db *DB) GetBytesNoLock(opts *ReadOptions, key []byte) ([]byte, error) {
+	var (
+		cErr    *C.char
+		cValLen C.size_t
+		cKey    = byteToChar(key)
+	)
+	if atomic.LoadInt32(&db.opened) == 0 {
+		return nil, errDBClosed
+	}
+
+	cValue := C.rocksdb_get(db.c, opts.c, cKey, C.size_t(len(key)), &cValLen, &cErr)
+	if cErr != nil {
+		defer C.free(unsafe.Pointer(cErr))
+		return nil, errors.New(C.GoString(cErr))
+	}
+	if cValue == nil {
+		return nil, nil
+	}
+	defer C.free(unsafe.Pointer(cValue))
+	return C.GoBytes(unsafe.Pointer(cValue), C.int(cValLen)), nil
 }
 
 // GetBytes is like Get but returns a copy of the data.
@@ -791,7 +814,7 @@ func (db *DB) DeleteFile(name string) {
 func (db *DB) Close() {
 	db.Lock()
 	C.rocksdb_close(db.c)
-	db.opened = 0
+	atomic.StoreInt32(&db.opened, 0)
 	db.Unlock()
 }
 
