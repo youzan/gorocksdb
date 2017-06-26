@@ -229,8 +229,20 @@ func (opts *Options) IncreaseParallelism(total_threads int) {
 //
 // Use this if you don't need to keep the data sorted, i.e. you'll never use
 // an iterator, only Put() and Get() API calls
+//
+// If you use this with rocksdb >= 5.0.2, you must call `SetAllowConcurrentMemtableWrites(false)`
+// to avoid an assertion error immediately on opening the db.
 func (opts *Options) OptimizeForPointLookup(block_cache_size_mb uint64) {
 	C.rocksdb_options_optimize_for_point_lookup(opts.c, C.uint64_t(block_cache_size_mb))
+}
+
+// Set whether to allow concurrent memtable writes. Conccurent writes are
+// not supported by all memtable factories (currently only SkipList memtables).
+// As of rocksdb 5.0.2 you must call `SetAllowConcurrentMemtableWrites(false)`
+// if you use `OptimizeForPointLookup`.
+func (opts *Options) SetAllowConcurrentMemtableWrites(allow bool) {
+	// TODO: wait merge master
+	//C.rocksdb_options_set_allow_concurrent_memtable_write(opts.c, boolToChar(allow))
 }
 
 // OptimizeLevelStyleCompaction optimize the DB for leveld compaction.
@@ -462,18 +474,6 @@ func (opts *Options) SetMaxBytesForLevelMultiplierAdditional(value []int) {
 	C.rocksdb_options_set_max_bytes_for_level_multiplier_additional(opts.c, &cLevels[0], C.size_t(len(value)))
 }
 
-// SetDisableDataSync enable/disable data sync.
-//
-// If true, then the contents of data files are not synced
-// to stable storage. Their contents remain in the OS buffers till the
-// OS decides to flush them. This option is good for bulk-loading
-// of data. Once the bulk-loading is complete, please issue a
-// sync to the OS to flush all dirty buffers to stable storage.
-// Default: false
-func (opts *Options) SetDisableDataSync(value bool) {
-	C.rocksdb_options_set_disable_data_sync(opts.c, C.int(btoi(value)))
-}
-
 // SetUseFsync enable/disable fsync.
 //
 // If true, then every store to stable storage will issue a fsync.
@@ -687,14 +687,6 @@ func (opts *Options) SetPurgeRedundantKvsWhileFlush(value bool) {
 	C.rocksdb_options_set_purge_redundant_kvs_while_flush(opts.c, boolToChar(value))
 }
 
-// SetAllowOsBuffer enable/disable os buffer.
-//
-// Data being read from file storage may be buffered in the OS
-// Default: true
-func (opts *Options) SetAllowOsBuffer(value bool) {
-	C.rocksdb_options_set_allow_os_buffer(opts.c, boolToChar(value))
-}
-
 // SetAllowMmapReads enable/disable mmap reads for reading sst tables.
 // Default: false
 func (opts *Options) SetAllowMmapReads(value bool) {
@@ -785,15 +777,6 @@ func (opts *Options) SetFIFOCompactionOptions(value *FIFOCompactionOptions) {
 	C.rocksdb_options_set_fifo_compaction_options(opts.c, value.c)
 }
 
-// SetVerifyChecksumsInCompaction enable/disable checksum verification.
-//
-// If true, compaction will verify checksum on every read that happens
-// as part of compaction
-// Default: true
-func (opts *Options) SetVerifyChecksumsInCompaction(value bool) {
-	C.rocksdb_options_set_verify_checksums_in_compaction(opts.c, boolToChar(value))
-}
-
 // SetMaxSequentialSkipInIterations specifies whether an iteration->Next()
 // sequentially skips over keys with the same user-key or not.
 //
@@ -851,17 +834,6 @@ func (opts *Options) SetMemtablePrefixBloomSizeRatio(value float64) {
 // Default: 0 (disabled)
 func (opts *Options) SetMaxSuccessiveMerges(value int) {
 	C.rocksdb_options_set_max_successive_merges(opts.c, C.size_t(value))
-}
-
-// SetMinPartialMergeOperands sets the number of partial merge operands
-// to accumulate before partial merge will be performed.
-//
-// Partial merge will not be called if the list of values to merge
-// is less than min_partial_merge_operands.
-// If min_partial_merge_operands < 2, then it will be treated as 2.
-// Default: 2
-func (opts *Options) SetMinPartialMergeOperands(value uint32) {
-	C.rocksdb_options_set_min_partial_merge_operands(opts.c, C.uint32_t(value))
 }
 
 // EnableStatistics enable statistics.

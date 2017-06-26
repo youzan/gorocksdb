@@ -774,19 +774,11 @@ func (db *DB) EnableFileDeletions(force bool) error {
 
 func (db *DB) DeleteFilesInRange(r Range) error {
 	var (
-		cErr *C.char
-		//cStart = byteToChar(r.Start)
-		//cLimit = byteToChar(r.Limit)
+		cErr   *C.char
+		cStart = byteToChar(r.Start)
+		cLimit = byteToChar(r.Limit)
 	)
-	db.RLock()
-	if db.opened == 0 {
-		db.RUnlock()
-		return errDBClosed
-	}
-
-	// TODO: wait merge
-	//C.rocksdb_delete_file_in_range(db.c, cStart, C.size_t(len(r.Start)), cEnd, C.size_t(len(r.Limit)), &cErr)
-	db.RUnlock()
+	C.rocksdb_delete_file_in_range(db.c, cStart, C.size_t(len(r.Start)), cLimit, C.size_t(len(r.Limit)), &cErr)
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return errors.New(C.GoString(cErr))

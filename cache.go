@@ -25,11 +25,9 @@ func (c *Cache) Destroy() {
 }
 
 func (c *Cache) GetUsage() int64 {
-	return 0
-	//return int64(C.rocksdb_cache_get_usage(c.c))
+	return int64(C.rocksdb_cache_get_usage(c.c))
 }
 
 func (c *Cache) GetPinnedUsage() int64 {
-	return 0
-	//return int64(C.rocksdb_cache_get_pinned_usage(c.c))
+	return int64(C.rocksdb_cache_get_pinned_usage(c.c))
 }
