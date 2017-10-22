@@ -5,17 +5,22 @@ package gorocksdb
 import "C"
 
 type RateLimiter struct {
-	//c *C.rocksdb_rate_limiter_t
+	c *C.rocksdb_ratelimiter_t
 }
 
-// TODO: wait merge from rocksdb
-func NewGenericRateLimiter(bytes_per_sec int64) *RateLimiter {
-	//c := C.rocksdb_ratelimiter_create(C.int64_t(bytes_per_sec), C.int64_t(100*1000), C.int32_t(10))
-	return &RateLimiter{}
+// refill_period_us default to 100*1000
+// fairness default to 10
+func NewGenericRateLimiter(bytes_per_sec, refill_period_us int64, fairness int32) *RateLimiter {
+	c := C.rocksdb_ratelimiter_create(
+		C.int64_t(bytes_per_sec),
+		C.int64_t(refill_period_us),
+		C.int32_t(fairness),
+	)
+	return &RateLimiter{c}
 }
 
 // Destroy deallocates the BlockBasedTableOptions object.
 func (r *RateLimiter) Destroy() {
-	//C.rocksdb_ratelimiter_destroy(r.c)
-	//r.c = nil
+	C.rocksdb_ratelimiter_destroy(r.c)
+	r.c = nil
 }

@@ -168,7 +168,7 @@ type Checkpoint struct {
 
 func NewCheckpoint(db *DB) (*Checkpoint, error) {
 	var cErr *C.char
-	cCheck := C.rocksdb_create_checkpoint(db.c, &cErr)
+	cCheck := C.rocksdb_checkpoint_object_create(db.c, &cErr)
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return nil, errors.New(C.GoString(cErr))
@@ -179,13 +179,14 @@ func NewCheckpoint(db *DB) (*Checkpoint, error) {
 	}, nil
 }
 
-func (c *Checkpoint) Save(dir string) error {
+func (c *Checkpoint) Save(dir string, log_size_for_flush uint64) error {
 	var (
 		cErr *C.char
 		cDir = C.CString(dir)
 	)
 	defer C.free(unsafe.Pointer(cDir))
-	C.rocksdb_checkpoint_open(c.c, cDir, &cErr)
+	C.rocksdb_checkpoint_create(c.c, cDir,
+		C.uint64_t(log_size_for_flush), &cErr)
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return errors.New(C.GoString(cErr))
@@ -194,6 +195,6 @@ func (c *Checkpoint) Save(dir string) error {
 }
 
 func (c *Checkpoint) Destroy() {
-	C.rocksdb_destroy_checkpoint(c.c)
+	C.rocksdb_checkpoint_object_destroy(c.c)
 	c.c, c.cDb = nil, nil
 }
