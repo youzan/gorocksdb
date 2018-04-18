@@ -939,16 +939,8 @@ func (opts *Options) Destroy() {
 		C.rocksdb_compactionfilter_destroy(opts.ccf)
 	}
 	opts.c = nil
-	if opts.env != nil {
-		opts.env.Destroy()
-		opts.env = nil
-	}
 	if opts.bbto != nil {
 		opts.bbto.Destroy()
 		opts.bbto = nil
-	}
-	if opts.rl != nil {
-		opts.rl.Destroy()
-		opts.rl = nil
 	}
 }

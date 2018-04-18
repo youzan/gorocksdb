@@ -4,6 +4,9 @@ package gorocksdb
 import "C"
 import "io"
 
+// WriteBatch header has an 8-byte sequence number followed by a 4-byte count.
+const kHeader int = 12
+
 // WriteBatch is a batching of Puts, Merges and Deletes.
 type WriteBatch struct {
 	c *C.rocksdb_writebatch_t
@@ -88,7 +91,7 @@ func (wb *WriteBatch) Count() int {
 // NewIterator returns a iterator to iterate over the records in the batch.
 func (wb *WriteBatch) NewIterator() *WriteBatchIterator {
 	data := wb.Data()
-	if len(data) < 8+4 {
+	if len(data) < kHeader {
 		return &WriteBatchIterator{}
 	}
 	return &WriteBatchIterator{data: data[12:]}
