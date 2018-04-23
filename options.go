@@ -72,7 +72,6 @@ type Options struct {
 	//cst  *C.rocksdb_slicetransform_t
 
 	ccf *C.rocksdb_compactionfilter_t
-	rl  *RateLimiter
 }
 
 // NewDefaultOptions creates the default Options.
@@ -203,7 +202,6 @@ func (opts *Options) SetEnv(value *Env) {
 }
 
 func (opts *Options) SetRateLimiter(value *RateLimiter) {
-	opts.rl = value
 	C.rocksdb_options_set_ratelimiter(opts.c, value.c)
 }
 
