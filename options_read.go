@@ -56,6 +56,24 @@ func (opts *ReadOptions) SetFillCache(value bool) {
 	C.rocksdb_readoptions_set_fill_cache(opts.c, boolToChar(value))
 }
 
+func (opts *ReadOptions) SetIterUpperBound(value []byte) {
+	cValue := byteToChar(value)
+	C.rocksdb_readoptions_set_iterate_upper_bound(opts.c, cValue, C.size_t(len(value)))
+}
+
+func (opts *ReadOptions) SetIterLowerBound(value []byte) {
+	cValue := byteToChar(value)
+	C.rocksdb_readoptions_set_iterate_lower_bound(opts.c, cValue, C.size_t(len(value)))
+}
+
+func (opts *ReadOptions) SetPrefixSameAsStart(value bool) {
+	C.rocksdb_readoptions_set_prefix_same_as_start(opts.c, boolToChar(value))
+}
+
+func (opts *ReadOptions) SetIgnoreRangeDeletions(value bool) {
+	C.rocksdb_readoptions_set_ignore_range_deletions(opts.c, boolToChar(value))
+}
+
 // SetSnapshot sets the snapshot which should be used for the read.
 // The snapshot must belong to the DB that is being read and must
 // not have been released.
