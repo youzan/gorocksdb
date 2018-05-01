@@ -24,10 +24,7 @@ func boolToChar(b bool) C.uchar {
 
 // charToByte converts a *C.char to a byte slice.
 func charToByte(data *C.char, len C.size_t) []byte {
-	var value []byte
-	sH := (*reflect.SliceHeader)(unsafe.Pointer(&value))
-	sH.Cap, sH.Len, sH.Data = int(len), int(len), uintptr(unsafe.Pointer(data))
-	return value
+	return C.GoBytes(unsafe.Pointer(data), C.int(len))
 }
 
 // byteToChar returns *C.char from byte slice.
@@ -42,13 +39,7 @@ func byteToChar(b []byte) *C.char {
 // Go []byte to C string
 // The C string is allocated in the C heap using malloc.
 func cByteSlice(b []byte) *C.char {
-	var c *C.char
-	if len(b) > 0 {
-		cData := C.malloc(C.size_t(len(b)))
-		copy((*[1 << 30]byte)(cData)[0:len(b)], b)
-		c = (*C.char)(cData)
-	}
-	return c
+	return (*C.char)(C.CBytes(b))
 }
 
 // stringToChar returns *C.char from string.

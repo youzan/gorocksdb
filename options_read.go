@@ -1,5 +1,6 @@
 package gorocksdb
 
+// #include <stdlib.h>
 // #include "rocksdb/c.h"
 import "C"
 import "unsafe"
@@ -19,6 +20,20 @@ const (
 	// BlockCacheTier reads data in memtable or block cache.
 	BlockCacheTier = ReadTier(1)
 )
+
+type IterBound struct {
+	bound *C.char
+	size  C.size_t
+}
+
+func NewIterBound(v []byte) *IterBound {
+	cv := C.CBytes(v)
+	return &IterBound{bound: (*C.char)(cv), size: C.size_t(len(v))}
+}
+
+func (ib *IterBound) Destroy() {
+	C.free(unsafe.Pointer(ib.bound))
+}
 
 // ReadOptions represent all of the available options when reading from a
 // database.
@@ -56,14 +71,12 @@ func (opts *ReadOptions) SetFillCache(value bool) {
 	C.rocksdb_readoptions_set_fill_cache(opts.c, boolToChar(value))
 }
 
-func (opts *ReadOptions) SetIterUpperBound(value []byte) {
-	cValue := byteToChar(value)
-	C.rocksdb_readoptions_set_iterate_upper_bound(opts.c, cValue, C.size_t(len(value)))
+func (opts *ReadOptions) SetIterUpperBound(value *IterBound) {
+	C.rocksdb_readoptions_set_iterate_upper_bound(opts.c, value.bound, value.size)
 }
 
-func (opts *ReadOptions) SetIterLowerBound(value []byte) {
-	cValue := byteToChar(value)
-	C.rocksdb_readoptions_set_iterate_lower_bound(opts.c, cValue, C.size_t(len(value)))
+func (opts *ReadOptions) SetIterLowerBound(value *IterBound) {
+	C.rocksdb_readoptions_set_iterate_lower_bound(opts.c, value.bound, value.size)
 }
 
 func (opts *ReadOptions) SetPrefixSameAsStart(value bool) {
