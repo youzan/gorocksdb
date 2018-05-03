@@ -570,28 +570,29 @@ func (db *DB) DropColumnFamily(c *ColumnFamilyHandle) error {
 //
 // The keys counted will begin at Range.Start and end on the key before
 // Range.Limit.
-func (db *DB) GetApproximateSizes(ranges []Range) []uint64 {
+func (db *DB) GetApproximateSizes(ranges []Range, includeMem bool) []uint64 {
 	sizes := make([]uint64, len(ranges))
 	if len(ranges) == 0 {
 		return sizes
 	}
+	memSizes := make([]uint64, len(ranges))
 
 	cStarts := make([]*C.char, len(ranges))
 	cLimits := make([]*C.char, len(ranges))
 	cStartLens := make([]C.size_t, len(ranges))
 	cLimitLens := make([]C.size_t, len(ranges))
-	for i, r := range ranges {
-		cStarts[i] = byteToChar(r.Start)
-		cStartLens[i] = C.size_t(len(r.Start))
-		cLimits[i] = byteToChar(r.Limit)
-		cLimitLens[i] = C.size_t(len(r.Limit))
-	}
+
 	db.RLock()
 	if db.opened == 0 {
 		db.RUnlock()
 		return nil
 	}
-
+	for i, r := range ranges {
+		cStarts[i] = cByteSlice(r.Start)
+		cStartLens[i] = C.size_t(len(r.Start))
+		cLimits[i] = cByteSlice(r.Limit)
+		cLimitLens[i] = C.size_t(len(r.Limit))
+	}
 	C.rocksdb_approximate_sizes(
 		db.c,
 		C.int(len(ranges)),
@@ -601,7 +602,28 @@ func (db *DB) GetApproximateSizes(ranges []Range) []uint64 {
 		&cLimitLens[0],
 		(*C.uint64_t)(&sizes[0]))
 
+	if includeMem {
+		C.rocksdb_approximate_memtable_sizes(
+			db.c,
+			C.int(len(ranges)),
+			&cStarts[0],
+			&cStartLens[0],
+			&cLimits[0],
+			&cLimitLens[0],
+			(*C.uint64_t)(&memSizes[0]),
+		)
+	}
+
 	db.RUnlock()
+	for i := 0; i < len(cStarts); i++ {
+		C.free(unsafe.Pointer(cStarts[i]))
+		C.free(unsafe.Pointer(cLimits[i]))
+	}
+	if includeMem {
+		for i, s := range memSizes {
+			sizes[i] += s
+		}
+	}
 	return sizes
 }
 
@@ -610,26 +632,28 @@ func (db *DB) GetApproximateSizes(ranges []Range) []uint64 {
 //
 // The keys counted will begin at Range.Start and end on the key before
 // Range.Limit.
-func (db *DB) GetApproximateSizesCF(cf *ColumnFamilyHandle, ranges []Range) []uint64 {
+func (db *DB) GetApproximateSizesCF(cf *ColumnFamilyHandle, ranges []Range, includeMem bool) []uint64 {
 	sizes := make([]uint64, len(ranges))
 	if len(ranges) == 0 {
 		return sizes
 	}
+	memSizes := make([]uint64, len(ranges))
 
 	cStarts := make([]*C.char, len(ranges))
 	cLimits := make([]*C.char, len(ranges))
 	cStartLens := make([]C.size_t, len(ranges))
 	cLimitLens := make([]C.size_t, len(ranges))
-	for i, r := range ranges {
-		cStarts[i] = byteToChar(r.Start)
-		cStartLens[i] = C.size_t(len(r.Start))
-		cLimits[i] = byteToChar(r.Limit)
-		cLimitLens[i] = C.size_t(len(r.Limit))
-	}
+
 	db.RLock()
 	if db.opened == 0 {
 		db.RUnlock()
 		return nil
+	}
+	for i, r := range ranges {
+		cStarts[i] = cByteSlice(r.Start)
+		cStartLens[i] = C.size_t(len(r.Start))
+		cLimits[i] = cByteSlice(r.Limit)
+		cLimitLens[i] = C.size_t(len(r.Limit))
 	}
 
 	C.rocksdb_approximate_sizes_cf(
@@ -642,7 +666,29 @@ func (db *DB) GetApproximateSizesCF(cf *ColumnFamilyHandle, ranges []Range) []ui
 		&cLimitLens[0],
 		(*C.uint64_t)(&sizes[0]))
 
+	if includeMem {
+		C.rocksdb_approximate_memtable_sizes_cf(
+			db.c,
+			cf.c,
+			C.int(len(ranges)),
+			&cStarts[0],
+			&cStartLens[0],
+			&cLimits[0],
+			&cLimitLens[0],
+			(*C.uint64_t)(&memSizes[0]),
+		)
+	}
 	db.RUnlock()
+
+	for i := 0; i < len(cStarts); i++ {
+		C.free(unsafe.Pointer(cStarts[i]))
+		C.free(unsafe.Pointer(cLimits[i]))
+	}
+	if includeMem {
+		for i, s := range memSizes {
+			sizes[i] += s
+		}
+	}
 	return sizes
 }
 
