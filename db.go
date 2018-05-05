@@ -737,13 +737,15 @@ func (db *DB) GetLiveFilesMetaData() []LiveFileMetadata {
 // CompactRange runs a manual compaction on the Range of keys given. This is
 // not likely to be needed for typical usage.
 func (db *DB) CompactRange(r Range) {
-	cStart := byteToChar(r.Start)
-	cLimit := byteToChar(r.Limit)
 	db.RLock()
 	if db.opened == 0 {
 		db.RUnlock()
 		return
 	}
+	cStart := cByteSlice(r.Start)
+	cLimit := cByteSlice(r.Limit)
+	defer C.free(unsafe.Pointer(cStart))
+	defer C.free(unsafe.Pointer(cLimit))
 
 	C.rocksdb_compact_range(db.c, cStart, C.size_t(len(r.Start)), cLimit, C.size_t(len(r.Limit)))
 	db.RUnlock()
@@ -752,13 +754,15 @@ func (db *DB) CompactRange(r Range) {
 // CompactRangeCF runs a manual compaction on the Range of keys given on the
 // given column family. This is not likely to be needed for typical usage.
 func (db *DB) CompactRangeCF(cf *ColumnFamilyHandle, r Range) {
-	cStart := byteToChar(r.Start)
-	cLimit := byteToChar(r.Limit)
 	db.RLock()
 	if db.opened == 0 {
 		db.RUnlock()
 		return
 	}
+	cStart := cByteSlice(r.Start)
+	cLimit := cByteSlice(r.Limit)
+	defer C.free(unsafe.Pointer(cStart))
+	defer C.free(unsafe.Pointer(cLimit))
 
 	C.rocksdb_compact_range_cf(db.c, cf.c, cStart, C.size_t(len(r.Start)), cLimit, C.size_t(len(r.Limit)))
 	db.RUnlock()
