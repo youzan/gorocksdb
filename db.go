@@ -692,6 +692,44 @@ func (db *DB) GetApproximateSizesCF(cf *ColumnFamilyHandle, ranges []Range, incl
 	return sizes
 }
 
+func (db *DB) GetApproximateKeyNum(ranges []Range) uint64 {
+	if len(ranges) == 0 {
+		return 0
+	}
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return 0
+	}
+
+	cStarts := make([]*C.char, len(ranges))
+	cLimits := make([]*C.char, len(ranges))
+	cStartLens := make([]C.size_t, len(ranges))
+	cLimitLens := make([]C.size_t, len(ranges))
+	for i, r := range ranges {
+		cStarts[i] = cByteSlice(r.Start)
+		cStartLens[i] = C.size_t(len(r.Start))
+		cLimits[i] = cByteSlice(r.Limit)
+		cLimitLens[i] = C.size_t(len(r.Limit))
+	}
+
+	cNum := C.rocksdb_get_table_property_keynum_in_ranges(
+		db.c,
+		C.int(len(ranges)),
+		&cStarts[0],
+		&cStartLens[0],
+		&cLimits[0],
+		&cLimitLens[0])
+
+	db.RUnlock()
+
+	for i := 0; i < len(cStarts); i++ {
+		C.free(unsafe.Pointer(cStarts[i]))
+		C.free(unsafe.Pointer(cLimits[i]))
+	}
+	return uint64(cNum)
+}
+
 // LiveFileMetadata is a metadata which is associated with each SST file.
 type LiveFileMetadata struct {
 	Name        string
