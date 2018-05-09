@@ -226,6 +226,10 @@ func (db *DB) Name() string {
 	return db.name
 }
 
+func (db *DB) IsOpened() bool {
+	return atomic.LoadInt32(&db.opened) != 0
+}
+
 // Get returns the data associated with the key from the database.
 func (db *DB) Get(opts *ReadOptions, key []byte) (*Slice, error) {
 	var (
