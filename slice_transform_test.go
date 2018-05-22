@@ -17,7 +17,8 @@ func TestSliceTransform(t *testing.T) {
 	ensure.Nil(t, db.Put(wo, []byte("foo2"), []byte("foo")))
 	ensure.Nil(t, db.Put(wo, []byte("bar1"), []byte("bar")))
 
-	iter := db.NewIterator(NewDefaultReadOptions())
+	iter, err := db.NewIterator(NewDefaultReadOptions())
+	ensure.Nil(t, err)
 	defer iter.Close()
 	prefix := []byte("foo")
 	numFound := 0

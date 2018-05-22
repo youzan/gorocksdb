@@ -18,7 +18,8 @@ func TestIterator(t *testing.T) {
 	}
 
 	ro := NewDefaultReadOptions()
-	iter := db.NewIterator(ro)
+	iter, err := db.NewIterator(ro)
+	ensure.Nil(t, err)
 	defer iter.Close()
 	var actualKeys [][]byte
 	for iter.SeekToFirst(); iter.Valid(); iter.Next() {

@@ -22,7 +22,8 @@ func TestComparator(t *testing.T) {
 
 	// create a iterator to collect the keys
 	ro := NewDefaultReadOptions()
-	iter := db.NewIterator(ro)
+	iter, err := db.NewIterator(ro)
+	ensure.Nil(t, err)
 	defer iter.Close()
 
 	// we seek to the last key and iterate in reverse order
