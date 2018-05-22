@@ -15,7 +15,7 @@ before_install:
   - sudo dpkg -i libgflags-dev_2.0-1.1ubuntu1_amd64.deb
 
 install:
-  - git clone https://github.com/facebook/rocksdb.git /tmp/rocksdb
+  - git clone https://github.com/absolute8511/rocksdb.git /tmp/rocksdb
   - pushd /tmp/rocksdb
   - make clean
   - make shared_lib
