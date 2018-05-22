@@ -7,10 +7,6 @@
 
 extern void gorocksdb_destruct_handler(void* state);
 
-/* CompactionFilter */
-
-extern rocksdb_compactionfilter_t* gorocksdb_compactionfilter_create(uintptr_t idx);
-
 /* Comparator */
 
 extern rocksdb_comparator_t* gorocksdb_comparator_create(uintptr_t idx);

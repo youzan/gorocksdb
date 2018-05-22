@@ -24,6 +24,9 @@ func boolToChar(b bool) C.uchar {
 
 // charToByte converts a *C.char to a byte slice.
 func charToByte(data *C.char, len C.size_t) []byte {
+	if data == nil {
+		return nil
+	}
 	return C.GoBytes(unsafe.Pointer(data), C.int(len))
 }
 
