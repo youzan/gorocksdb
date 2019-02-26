@@ -217,6 +217,14 @@ func (opts *Options) OptimizeForPointLookup(block_cache_size_mb uint64) {
 	C.rocksdb_options_optimize_for_point_lookup(opts.c, C.uint64_t(block_cache_size_mb))
 }
 
+// OptimizeFilterForHits optimize filter for hit, use less memory since last level will has no bloom filter
+//
+// If you're certain that Get() will mostly find a key you're looking for, you can set options.optimize_filters_for_hits = true
+// to save memory usage for bloom filters. The default is false.
+func (opts *Options) OptimizeFilterForHits(enable bool) {
+	C.rocksdb_options_set_optimize_filters_for_hits(opts.c, C.int(btoi(enable)))
+}
+
 // Set whether to allow concurrent memtable writes. Conccurent writes are
 // not supported by all memtable factories (currently only SkipList memtables).
 // As of rocksdb 5.0.2 you must call `SetAllowConcurrentMemtableWrites(false)`

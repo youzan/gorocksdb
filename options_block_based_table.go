@@ -117,3 +117,7 @@ func (opts *BlockBasedTableOptions) SetWholeKeyFiltering(value bool) {
 func (opts *BlockBasedTableOptions) SetCacheIndexAndFilterBlocks(value bool) {
 	C.rocksdb_block_based_options_set_cache_index_and_filter_blocks(opts.c, boolToChar(value))
 }
+
+func (opts *BlockBasedTableOptions) SetPinL0FilterAndIndexBlocksInCache(value bool) {
+	C.rocksdb_block_based_options_set_pin_l0_filter_and_index_blocks_in_cache(opts.c, boolToChar(value))
+}
