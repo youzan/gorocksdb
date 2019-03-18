@@ -919,6 +919,21 @@ func (opts *Options) SetUint64AddMergeOperator() {
 	C.rocksdb_options_set_uint64add_merge_operator(opts.c)
 }
 
+//EnablePipelinedWrite enable pipeline option
+func (opts *Options) EnablePipelinedWrite(value bool) {
+	C.rocksdb_options_set_enable_pipelined_write(opts.c, boolToChar(value))
+}
+
+// SetMaxSubCompactions set max sub compaction
+func (opts *Options) SetMaxSubCompactions(value uint32) {
+	C.rocksdb_options_set_max_subcompactions(opts.c, C.uint32_t(value))
+}
+
+//SetMemtableInsertWithHintFixedLengthPrefixExtractor set insert hint
+func (opts *Options) SetMemtableInsertWithHintFixedLengthPrefixExtractor(length int) {
+	C.rocksdb_options_set_memtable_insert_with_hint_fixed_length_prefix_extractor(opts.c, C.size_t(length))
+}
+
 // Destroy deallocates the Options object.
 func (opts *Options) Destroy() {
 	C.rocksdb_options_destroy(opts.c)
