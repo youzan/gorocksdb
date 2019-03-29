@@ -784,12 +784,16 @@ func (db *DB) CompactRange(r Range) {
 		db.RUnlock()
 		return
 	}
-	cStart := cByteSlice(r.Start)
-	cLimit := cByteSlice(r.Limit)
-	defer C.free(unsafe.Pointer(cStart))
-	defer C.free(unsafe.Pointer(cLimit))
+	if r.Start == nil && r.Limit == nil {
+		C.rocksdb_compact_range(db.c, nil, C.size_t(0), nil, C.size_t(0))
+	} else {
+		cStart := cByteSlice(r.Start)
+		cLimit := cByteSlice(r.Limit)
+		defer C.free(unsafe.Pointer(cStart))
+		defer C.free(unsafe.Pointer(cLimit))
 
-	C.rocksdb_compact_range(db.c, cStart, C.size_t(len(r.Start)), cLimit, C.size_t(len(r.Limit)))
+		C.rocksdb_compact_range(db.c, cStart, C.size_t(len(r.Start)), cLimit, C.size_t(len(r.Limit)))
+	}
 	db.RUnlock()
 }
 
