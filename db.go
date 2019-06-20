@@ -346,6 +346,7 @@ func (db *DB) MultiGetBytes(opts *ReadOptions, keyList [][]byte, values [][]byte
 			errs[i] = errDBClosed
 			C.free(unsafe.Pointer(cKeys[i]))
 		}
+		db.RUnlock()
 		return
 	}
 	db.RUnlock()
@@ -896,6 +897,17 @@ func (db *DB) DeleteFile(name string) {
 
 	C.rocksdb_delete_file(db.c, cName)
 	db.RUnlock()
+}
+
+// just close engine and not free db handle
+// this can trigger all running write and compact return error
+func (db *DB) Shutdown() {
+	db.RLock()
+	defer db.RUnlock()
+	if db.opened == 0 {
+		return
+	}
+	C.rocksdb_shutdown(db.c)
 }
 
 // Close closes the database.
