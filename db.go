@@ -781,10 +781,16 @@ func (db *DB) GetLiveFilesMetaData() []LiveFileMetadata {
 // not likely to be needed for typical usage.
 func (db *DB) CompactRange(r Range) {
 	db.RLock()
-	if db.opened == 0 {
-		db.RUnlock()
+	op := db.opened
+	db.RUnlock()
+	// TODO: fixme. We should hold read lock to avoid race during close and compaction,
+	// however we currently can not support cancel manual compaction, so we do not
+	// hold lock during compaction to avoid close block.
+	if op == 0 {
 		return
 	}
+	// TODO: we need support cancel all manual compact before close db,
+	// to avoid blocking close during compaction.
 	if r.Start == nil && r.Limit == nil {
 		C.rocksdb_compact_range(db.c, nil, C.size_t(0), nil, C.size_t(0))
 	} else {
@@ -795,12 +801,12 @@ func (db *DB) CompactRange(r Range) {
 
 		C.rocksdb_compact_range(db.c, cStart, C.size_t(len(r.Start)), cLimit, C.size_t(len(r.Limit)))
 	}
-	db.RUnlock()
 }
 
 // CompactRangeCF runs a manual compaction on the Range of keys given on the
 // given column family. This is not likely to be needed for typical usage.
 func (db *DB) CompactRangeCF(cf *ColumnFamilyHandle, r Range) {
+	// TODO: fixme about lock
 	db.RLock()
 	if db.opened == 0 {
 		db.RUnlock()
@@ -899,22 +905,23 @@ func (db *DB) DeleteFile(name string) {
 	db.RUnlock()
 }
 
-// just close engine and not free db handle
-// this can trigger all running write and compact return error
-func (db *DB) Shutdown() {
+// just prepare shutdown to allow cancel all background and maunal compaction.
+// this should trigger all running write and compact return error
+func (db *DB) PreShutdown() {
 	db.RLock()
 	defer db.RUnlock()
 	if db.opened == 0 {
 		return
 	}
-	C.rocksdb_shutdown(db.c)
+	// TODO: cancel all manual compaction and do not allow new compact start here, but should keep db opened
+	// if supported, the read lock for compaction should be changed.
 }
 
 // Close closes the database.
 func (db *DB) Close() {
 	db.Lock()
-	C.rocksdb_close(db.c)
 	atomic.StoreInt32(&db.opened, 0)
+	C.rocksdb_close(db.c)
 	db.Unlock()
 }
 

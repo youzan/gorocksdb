@@ -12,6 +12,28 @@ func TestOpenDb(t *testing.T) {
 	defer db.Close()
 }
 
+func TestPanicAfterShutdownCloseDb(t *testing.T) {
+	db := newTestDB(t, "TestOpenDb", nil)
+	opts := NewDefaultReadOptions()
+	optsW := NewDefaultWriteOptions()
+	it, err := db.NewIterator(opts)
+	ensure.Nil(t, err)
+	ensure.NotNil(t, it)
+	db.PreShutdown()
+	db.CompactRange(Range{})
+	db.Get(opts, []byte("test"))
+	b := NewWriteBatch()
+	b.Put([]byte("test"), []byte("test"))
+	err = db.Write(optsW, b)
+	ensure.Nil(t, err)
+	db.NewIterator(opts)
+	db.Close()
+	db.CompactRange(Range{})
+	db.Get(opts, []byte("test"))
+	it, err = db.NewIterator(opts)
+	ensure.NotNil(t, err)
+}
+
 func TestDBCRUD(t *testing.T) {
 	db := newTestDB(t, "TestDBGet", nil)
 	defer db.Close()
