@@ -19,6 +19,13 @@ func NewGenericRateLimiter(bytes_per_sec, refill_period_us int64, fairness int32
 	return &RateLimiter{c}
 }
 
+func (r *RateLimiter) SetBytesPerSecond(bytes_per_sec int64) {
+	if bytes_per_sec <= 0 || r.c == nil {
+		return
+	}
+	C.rocksdb_options_set_ratelimiter_bytes_per_second(r.c, C.int64_t(bytes_per_sec))
+}
+
 // Destroy deallocates the BlockBasedTableOptions object.
 func (r *RateLimiter) Destroy() {
 	C.rocksdb_ratelimiter_destroy(r.c)
