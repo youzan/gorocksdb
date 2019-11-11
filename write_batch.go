@@ -80,6 +80,7 @@ func (wb *WriteBatch) DeleteCF(cf *ColumnFamilyHandle, key []byte) {
 func (wb *WriteBatch) Data() []byte {
 	var cSize C.size_t
 	cValue := C.rocksdb_writebatch_data(wb.c, &cSize)
+	// we should not free cValue because it is referenced by c struct.
 	return charToByte(cValue, cSize)
 }
 
