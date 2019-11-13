@@ -736,7 +736,7 @@ func (db *DB) GetApproximateKeyNum(ranges []Range) uint64 {
 	return uint64(cNum)
 }
 
-func (db *DB) SetOptions(keys, values []string) error {
+func (db *DB) SetCFOptions(keys, values []string) error {
 	db.RLock()
 	defer db.RUnlock()
 	if db.opened == 0 {
@@ -760,6 +760,47 @@ func (db *DB) SetOptions(keys, values []string) error {
 	var cErr *C.char
 
 	C.rocksdb_set_options(
+		db.c,
+		C.int(num_keys),
+		&cKeys[0],
+		&cValues[0],
+		&cErr,
+	)
+	for i := 0; i < num_keys; i++ {
+		C.free(unsafe.Pointer(cKeys[i]))
+		C.free(unsafe.Pointer(cValues[i]))
+	}
+	if cErr != nil {
+		defer C.free(unsafe.Pointer(cErr))
+		return errors.New(C.GoString(cErr))
+	}
+	return nil
+}
+
+func (db *DB) SetDBOptions(keys, values []string) error {
+	db.RLock()
+	defer db.RUnlock()
+	if db.opened == 0 {
+		return nil
+	}
+	num_keys := len(keys)
+	if num_keys == 0 {
+		return nil
+	}
+	if len(keys) != len(values) {
+		return fmt.Errorf("key value for options mismatch:%v, %v", len(keys), len(values))
+	}
+
+	cKeys := make([]*C.char, num_keys)
+	cValues := make([]*C.char, num_keys)
+	for i := range keys {
+		cKeys[i] = C.CString(keys[i])
+		cValues[i] = C.CString(values[i])
+	}
+
+	var cErr *C.char
+
+	C.rocksdb_set_db_options(
 		db.c,
 		C.int(num_keys),
 		&cKeys[0],
