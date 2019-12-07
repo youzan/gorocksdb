@@ -252,6 +252,67 @@ func (db *DB) Get(opts *ReadOptions, key []byte) (*Slice, error) {
 	return NewSlice(cValue, cValLen), nil
 }
 
+func (db *DB) GetNoLock(opts *ReadOptions, key []byte) (*Slice, error) {
+	var (
+		cErr    *C.char
+		cValLen C.size_t
+		cKey    = byteToChar(key)
+	)
+	cValue := C.rocksdb_get(db.c, opts.c, cKey, C.size_t(len(key)), &cValLen, &cErr)
+	if cErr != nil {
+		defer C.free(unsafe.Pointer(cErr))
+		return nil, errors.New(C.GoString(cErr))
+	}
+	return NewSlice(cValue, cValLen), nil
+}
+
+func (db *DB) Exist(opts *ReadOptions, key []byte) (bool, error) {
+	var (
+		cErr    *C.char
+		cValLen C.size_t
+		cKey    = byteToChar(key)
+	)
+	db.RLock()
+	if db.opened == 0 {
+		db.RUnlock()
+		return false, errDBClosed
+	}
+
+	cValue := C.rocksdb_get(db.c, opts.c, cKey, C.size_t(len(key)), &cValLen, &cErr)
+	db.RUnlock()
+	if cErr != nil {
+		defer C.free(unsafe.Pointer(cErr))
+		return false, errors.New(C.GoString(cErr))
+	}
+	if cValue == nil {
+		return false, nil
+	}
+	C.free(unsafe.Pointer(cValue))
+	return true, nil
+}
+
+func (db *DB) ExistNoLock(opts *ReadOptions, key []byte) (bool, error) {
+	var (
+		cErr    *C.char
+		cValLen C.size_t
+		cKey    = byteToChar(key)
+	)
+	if atomic.LoadInt32(&db.opened) == 0 {
+		return false, errDBClosed
+	}
+
+	cValue := C.rocksdb_get(db.c, opts.c, cKey, C.size_t(len(key)), &cValLen, &cErr)
+	if cErr != nil {
+		defer C.free(unsafe.Pointer(cErr))
+		return false, errors.New(C.GoString(cErr))
+	}
+	if cValue == nil {
+		return false, nil
+	}
+	C.free(unsafe.Pointer(cValue))
+	return true, nil
+}
+
 func (db *DB) GetBytesNoLock(opts *ReadOptions, key []byte) ([]byte, error) {
 	var (
 		cErr    *C.char
@@ -366,6 +427,51 @@ func (db *DB) MultiGetBytes(opts *ReadOptions, keyList [][]byte, values [][]byte
 		}
 		C.free(unsafe.Pointer(cKeys[i]))
 	}
+}
+
+func (db *DB) ExistCnt(opts *ReadOptions, keyList [][]byte) (int64, error) {
+	cKeys := make([]*C.char, len(keyList))
+	cKeySizeList := make([]C.size_t, len(keyList))
+	cValues := make([]*C.char, len(keyList))
+	cValueSizeList := make([]C.size_t, len(keyList))
+	cErrs := make([]*C.char, len(keyList))
+	for i, k := range keyList {
+		cKeys[i] = cByteSlice(k)
+		cKeySizeList[i] = C.size_t(len(k))
+	}
+	db.RLock()
+	if db.opened == 1 {
+		C.rocksdb_multi_get(db.c, opts.c, C.size_t(len(keyList)),
+			(**C.char)(unsafe.Pointer(&cKeys[0])),
+			(*C.size_t)(unsafe.Pointer(&cKeySizeList[0])),
+			(**C.char)(unsafe.Pointer(&cValues[0])),
+			(*C.size_t)(unsafe.Pointer(&cValueSizeList[0])),
+			(**C.char)(unsafe.Pointer(&cErrs[0])),
+		)
+	} else {
+		db.RUnlock()
+		for i := 0; i < len(keyList); i++ {
+			C.free(unsafe.Pointer(cKeys[i]))
+		}
+		return 0, errDBClosed
+	}
+	db.RUnlock()
+	n := 0
+	var err error
+	for i := 0; i < len(keyList); i++ {
+		C.free(unsafe.Pointer(cKeys[i]))
+		if cErrs[i] == nil {
+			if cValues[i] == nil {
+			} else {
+				n++
+			}
+		} else {
+			err = errors.New(C.GoString(cErrs[i]))
+			C.free(unsafe.Pointer(cErrs[i]))
+		}
+		C.free(unsafe.Pointer(cValues[i]))
+	}
+	return int64(n), err
 }
 
 // Put writes data associated with a key to the database.

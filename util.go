@@ -27,7 +27,11 @@ func charToByte(data *C.char, len C.size_t) []byte {
 	if data == nil {
 		return nil
 	}
-	return C.GoBytes(unsafe.Pointer(data), C.int(len))
+	var value []byte
+	sH := (*reflect.SliceHeader)(unsafe.Pointer(&value))
+	sH.Cap, sH.Len, sH.Data = int(len), int(len), uintptr(unsafe.Pointer(data))
+	return value
+	//return C.GoBytes(unsafe.Pointer(data), C.int(len))
 }
 
 // byteToChar returns *C.char from byte slice.
