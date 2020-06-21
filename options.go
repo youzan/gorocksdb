@@ -421,6 +421,10 @@ func (opts *Options) SetTargetFileSizeBase(value uint64) {
 	C.rocksdb_options_set_target_file_size_base(opts.c, C.uint64_t(value))
 }
 
+func (opts *Options) SetLevelCompactionDynamicLevelBytes(value bool) {
+	C.rocksdb_options_set_level_compaction_dynamic_level_bytes(opts.c, C.int(btoi(value)))
+}
+
 // SetTargetFileSizeMultiplier sets the target file size multiplier for compaction.
 // Default: 1
 func (opts *Options) SetTargetFileSizeMultiplier(value int) {
