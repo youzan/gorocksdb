@@ -84,6 +84,19 @@ func NewNativeOptions(c *C.rocksdb_options_t) *Options {
 	return &Options{c: c}
 }
 
+// SetCompactionFilter sets the specified compaction filter
+// which will be applied on compactions.
+// Default: nil
+func (opts *Options) SetCompactionFilter(value CompactionFilter) {
+	if nc, ok := value.(nativeCompactionFilter); ok {
+		opts.ccf = nc.c
+	} else {
+		idx := registerCompactionFilter(value)
+		opts.ccf = C.gorocksdb_compactionfilter_create(C.uintptr_t(idx))
+	}
+	C.rocksdb_options_set_compaction_filter(opts.c, opts.ccf)
+}
+
 // SetComparator sets the comparator which define the order of keys in the table.
 // Default: a comparator that uses lexicographic byte-wise ordering
 func (opts *Options) SetComparator(value Comparator) {
